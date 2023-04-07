@@ -124,7 +124,7 @@ class BackgroundCommand : public BuiltInCommand {
 };
 
 class TimeoutCommand : public BuiltInCommand {
-/* Optional */
+/* Bonus */
 // TODO: Add your data members
  public:
   explicit TimeoutCommand(const char* cmd_line);
@@ -132,17 +132,23 @@ class TimeoutCommand : public BuiltInCommand {
   void execute() override;
 };
 
-class FareCommand : public BuiltInCommand {
-  /* Optional */
+class ChmodCommand : public BuiltInCommand {
   // TODO: Add your data members
  public:
-  FareCommand(const char* cmd_line);
-  virtual ~FareCommand() {}
+  ChmodCommand(const char* cmd_line);
+  virtual ~ChmodCommand() {}
+  void execute() override;
+};
+
+class GetFileTypeCommand : public BuiltInCommand {
+  // TODO: Add your data members
+ public:
+  GetFileTypeCommand(const char* cmd_line);
+  virtual ~GetFileTypeCommand() {}
   void execute() override;
 };
 
 class SetcoreCommand : public BuiltInCommand {
-  /* Optional */
   // TODO: Add your data members
  public:
   SetcoreCommand(const char* cmd_line);
@@ -151,7 +157,6 @@ class SetcoreCommand : public BuiltInCommand {
 };
 
 class KillCommand : public BuiltInCommand {
-  /* Bonus */
  // TODO: Add your data members
  public:
   KillCommand(const char* cmd_line, JobsList* jobs);
