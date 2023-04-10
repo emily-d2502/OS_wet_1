@@ -1,6 +1,6 @@
 #TODO: replace ID with your own IDS, for example: 123456789_123456789
-SUBMITTERS := <student1-ID>_<student2-ID>
-COMPILER := g++
+SUBMITTERS := 324934082_<student2-ID>
+COMPILER := clang++
 COMPILER_FLAGS := --std=c++11 -Wall
 SRCS := Commands.cpp signals.cpp smash.cpp
 OBJS=$(subst .cpp,.o,$(SRCS))
@@ -29,3 +29,6 @@ zip: $(SRCS) $(HDRS)
 clean:
 	rm -rf $(SMASH_BIN) $(OBJS) $(TESTS_OUTPUTS) 
 	rm -rf $(SUBMITTERS).zip
+
+emily: main.cpp Commands.cpp
+	$(COMPILER) --std=c++11 $^ -o $@

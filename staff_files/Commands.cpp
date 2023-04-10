@@ -77,39 +77,62 @@ void _removeBackgroundSign(char* cmd_line) {
   cmd_line[str.find_last_not_of(WHITESPACE, idx) + 1] = 0;
 }
 
+// TODO: Add your implementation for classes in Commands.h 
+
 SmallShell::SmallShell():
     _name("smash> ") {
+// TODO: add your implementation
 }
 
-SmallShell::~SmallShell() { }
+SmallShell::~SmallShell() {
+// TODO: add your implementation
+}
 
-
+/**
+* Creates and returns a pointer to Command class which matches the given command line (cmd_line)
+*/
 Command * SmallShell::CreateCommand(const char* cmd_line) {
     
-    char* args[COMMAND_MAX_ARGS];
+    char* args[20];
     _parseCommandLine(cmd_line, args);
-    string firstWord(args[0]);
-
+    string firstWord = args[0];
     if (firstWord.compare("chprompt") == 0) {
         return new ChpromptCommand(args, this);
     }
     return nullptr;
+    
+
+
+
+
+	// For example:
+/*
+  string cmd_s = _trim(string(cmd_line));
+  string firstWord = cmd_s.substr(0, cmd_s.find_first_of(" \n"));
+
+  if (firstWord.compare("pwd") == 0) {
+    return new GetCurrDirCommand(cmd_line);
+  }
+  else if (firstWord.compare("showpid") == 0) {
+    return new ShowPidCommand(cmd_line);
+  }
+  else if ...
+  .....
+  else {
+    return new ExternalCommand(cmd_line);
+  }
+  */
+
+
 }
 
 void SmallShell::executeCommand(const char *cmd_line) {
-    Command* cmd = CreateCommand(cmd_line);
-    if (cmd) {
-        cmd->execute();
-    }  
-}
-
-ChpromptCommand::ChpromptCommand(char* args[], SmallShell *smash):
-    BuiltInCommand() {
-    _smash = smash;
-    _new_name = args[1];
-    _new_name.append("> ");
-}
-
-void ChpromptCommand::execute() {
-    _smash->name() = _new_name;
+  // TODO: Add your implementation here
+  // for example:
+  Command* cmd = CreateCommand(cmd_line);
+  if (cmd) {
+    cmd->execute();
+  }
+  
+  // Please note that you must fork smash process for some commands (e.g., external commands....)
 }
