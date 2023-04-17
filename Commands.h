@@ -3,7 +3,7 @@
 
 #include <vector>
 
-#define COMMAND_ARGS_MAX_LENGTH (200)
+#define COMMAND_ARGS_MAX_LENGTH (80)
 #define COMMAND_MAX_ARGS (20)
 
 class Command {
@@ -18,9 +18,12 @@ public:
 
 class SmallShell {
  private:
-    std::string _name;
     SmallShell();
+    std::string _name;
+    char *_cwd;
+    bool _cd_called;
 
+    friend class BuiltInCommand;
  public:
     static SmallShell& getInstance() {
         static SmallShell instance;
@@ -31,21 +34,21 @@ class SmallShell {
     void operator=(SmallShell const&)  = delete;
     ~SmallShell();
     void executeCommand(const char* cmd_line);
-    std::string& name(){
-        return _name;
-    }
 };
 
 class BuiltInCommand : public Command {
+protected:
+    SmallShell *_smash;
+    std::string& smash_name();
+    char *smash_cwd();
+    bool &smash_cd_called();
 public:
-    BuiltInCommand(): Command() {}
-    BuiltInCommand(const char* cmd_line);
+    BuiltInCommand(SmallShell *smash);
     virtual ~BuiltInCommand() {}
 };
 
 class ChpromptCommand : public BuiltInCommand {
 private:
-    SmallShell *_smash;
     std::string _new_name;
 public:
     ChpromptCommand(char* args[], SmallShell *smash);
@@ -54,10 +57,26 @@ public:
 };
 
 class ShowPidCommand : public BuiltInCommand {
- public:
-  ShowPidCommand(char* args[], SmallShell *smash);
-  virtual ~ShowPidCommand() {}
-  void execute() override;
+public:
+    ShowPidCommand(char* args[], SmallShell *smash);
+    virtual ~ShowPidCommand() {}
+    void execute() override;
+};
+
+class GetCurrDirCommand : public BuiltInCommand {
+public:
+    GetCurrDirCommand(char* args[], SmallShell *smash);
+    virtual ~GetCurrDirCommand() {}
+    void execute() override;
+};
+
+class ChangeDirCommand : public BuiltInCommand {
+private:
+    char *_new_dir;
+public:
+    ChangeDirCommand(char* args[], SmallShell *smash);
+    virtual ~ChangeDirCommand() {}
+    void execute() override;
 };
 
 
