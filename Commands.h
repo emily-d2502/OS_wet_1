@@ -7,24 +7,29 @@
 #define COMMAND_ARGS_MAX_LENGTH (80)
 #define COMMAND_MAX_ARGS (20)
 
+class SmallShell;
 class Command {
 public:
-    Command(const char* cmd_line);
+    Command(const char* cmd_line, SmallShell *smash);
     virtual ~Command() {}
     virtual void execute() = 0;
-    //virtual void prepare();
-    //virtual void cleanup();
-    virtual int pid();
-    const char *cmd_line() const;
+    int pid();
+    const char *cmd_line();
 
-    class CommandError {
-        std::string _message;
-    public:
-        CommandError(const std::string& message);
-        const std::string& what() const;
-    };
+    class CommandError;
 private:
     char* _cmd_line;
+protected:
+    SmallShell *_smash;
+    int _pid;
+};
+
+class Command::CommandError {
+private:
+    std::string _message;
+public:
+    CommandError(const std::string& message);
+    std::string& what() const;
 };
 
 #define DECLARE_SMALL_SHELL()                       \
@@ -39,7 +44,7 @@ private:                                            \
     char *_cwd;                                     \
     bool _cd_called;                                \
     JobsList _job_list;                             \
-    int _running_cmd_pid;                           \
+                                                    \
     Command* _running_cmd;                          \
                                                     \
 public:                                             \
@@ -55,16 +60,22 @@ public:                                             \
 };
 
 
-class SmallShell;
 class BuiltInCommand : public Command {
 protected:
-    SmallShell *_smash;
     std::string& smash_name();
     char *smash_cwd();
     bool &smash_cd_called();
+    Command* &smash_running_cmd();
 public:
     BuiltInCommand(const char* cmd_line, SmallShell *smash);
     virtual ~BuiltInCommand() {}
+};
+
+class ExternalCommand : public Command {
+public:
+    ExternalCommand(const char* cmd_line, SmallShell *smash);
+    virtual ~ExternalCommand() {}
+    void execute() override;
 };
 
 class ChpromptCommand : public BuiltInCommand {
@@ -99,30 +110,9 @@ public:
     void execute() override;
 };
 
-class ExternalCommand : public Command {
-private:
-    SmallShell *_smash;
-    int _pid;
-public:
-    ExternalCommand(const char* cmd_line, SmallShell *smash);
-    virtual ~ExternalCommand() {}
-    void execute() override;
-    int pid() override;
-};
-
 class JobsList {
 public:
-    class JobEntry {
-    public:
-        JobEntry(Command *cmd, bool stopped);
-    private:
-        int _jid;
-        bool _stopped;
-        time_t _start;
-        Command *_cmd;
-
-        friend JobsList;
-    };
+    class JobEntry;
     JobsList();
     ~JobsList() {}
     void addJob(Command* cmd, bool stopped = false);
@@ -131,12 +121,30 @@ public:
     void removeFinishedJobs();
     JobEntry * getJobById(int jobId);
     void removeJobById(int jobId);
-    JobEntry * getLastJob(int* lastJobId);
+    JobEntry * getLastJob(int* lastJobId); // add support when it's nullptr
     JobEntry *getLastStoppedJob(int *jobId);
 //   TODO: Add extra methods or modify exisitng ones as needed
 private:
     std::list<JobEntry *> _jobs;
     int _next_jid;
+};
+
+class JobsList::JobEntry {
+public:
+    JobEntry(Command *cmd, bool stopped);
+    JobEntry(const JobEntry&) = delete;
+    void operator=(const JobEntry&) = delete;
+    ~JobEntry() {}
+    Command *cmd();
+    bool &stopped();
+
+private:
+    int _jid;
+    bool _stopped;
+    time_t _start;
+    Command *_cmd;
+
+    friend JobsList;
 };
 
 DECLARE_SMALL_SHELL()
@@ -148,6 +156,24 @@ public:
     virtual ~JobsCommand() {}
     void execute() override;
 };
+
+class ForegroundCommand : public BuiltInCommand {
+    Command *_cmd;
+public:
+    ForegroundCommand(const char* cmd_line, char* args[], SmallShell *smash, JobsList* jobs);
+    virtual ~ForegroundCommand() {}
+    void execute() override;
+};
+
+class BackgroundCommand : public BuiltInCommand {
+    Command *_cmd;
+public:
+    BackgroundCommand(const char* cmd_line, char* args[], SmallShell *smash, JobsList* jobs);
+    virtual ~BackgroundCommand() {}
+    void execute() override;
+};
+
+
 
 
 

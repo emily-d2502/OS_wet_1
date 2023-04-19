@@ -80,33 +80,35 @@ void _removeBackgroundSign(char* cmd_line) {
 
 /* -------------- Command -------------- */
 
-Command::Command(const char* cmd_line) {
+Command::Command(const char* cmd_line, SmallShell *smash) {
+    _smash = smash;
     _cmd_line = new char[COMMAND_ARGS_MAX_LENGTH];
     strcpy(_cmd_line, cmd_line);
 }
+
+const char *Command::cmd_line() {
+    return _cmd_line;
+}
+
+int Command::pid() {
+    return _pid;
+}
+
+/* -------------- Command::CommandError -------------- */
 
 Command::CommandError::CommandError(const std::string& message) {
     _message = message;
 }
 
-const std::string& Command::CommandError::what() const {
+std::string& Command::CommandError::what() const {
     return _message;
 }
 
-int Command::pid() {
-    return -1;
-}
-
-const char *Command::cmd_line() const {
-    return _cmd_line;
-}
-
-/* -------------- Small Shell -------------- */
+/* -------------- SmallShell -------------- */
 SmallShell::SmallShell():
     _name("smash> ") {
     _cwd = new char[COMMAND_ARGS_MAX_LENGTH]; 
     _cd_called = false;
-    _running_cmd_pid = 0;
     _running_cmd = nullptr;
 }
 
@@ -132,6 +134,10 @@ Command *SmallShell::CreateCommand(const char* cmd_line) {
         return new ChangeDirCommand(cmd_line, args, this);
     } else if (firstWord.compare("jobs") == 0) {
         return new JobsCommand(cmd_line, this, &_job_list);
+    } else if (firstWord.compare("fg") == 0) {
+        return new ForegroundCommand(cmd_line, args, this, &_job_list);
+    } else if (firstWord.compare("bg") == 0) {
+        return new BackgroundCommand(cmd_line, args, this, &_job_list);
     }
     return new ExternalCommand(cmd_line, this);
 }
@@ -153,17 +159,20 @@ const std::string& SmallShell::name() const {
 }
 
 void SmallShell::handle_ctrl_z(int sig_num) {
-    if (_running_cmd_pid) {
-        kill(_running_cmd_pid, sig_num);
-        _running_cmd_pid = 0;
+    if (_running_cmd) {
+        kill(_running_cmd->pid(), sig_num);
         _job_list.addJob(_running_cmd, true);
+        _running_cmd = nullptr;
     }
 }
 
 /* -------------- BuiltInCommand -------------- */
 
 BuiltInCommand::BuiltInCommand(const char* cmd_line, SmallShell *smash): 
-    Command(cmd_line), _smash(smash) {}
+    Command(cmd_line, smash) {
+    // smash will run this code
+    _pid = getpid();
+}
 
 std::string& BuiltInCommand::smash_name() {
     return _smash->_name;
@@ -175,6 +184,45 @@ char *BuiltInCommand::smash_cwd() {
 
 bool &BuiltInCommand::smash_cd_called() {
     return _smash->_cd_called;
+}
+
+Command* &BuiltInCommand::smash_running_cmd() {
+    return _smash->_running_cmd;
+}
+
+/* -------------- ExternalCommand -------------- */
+
+ExternalCommand::ExternalCommand(const char* cmd_line, SmallShell *smash):
+    Command(cmd_line, smash) {
+}
+
+void ExternalCommand::execute() {
+    char cmd_line[COMMAND_ARGS_MAX_LENGTH];
+    strcpy(cmd_line, this->cmd_line());
+
+    bool bg_cmd = _isBackgroundComamnd(cmd_line);
+    if (bg_cmd) {
+        _removeBackgroundSign(cmd_line);
+    }
+    char* args[COMMAND_MAX_ARGS + 1];
+    _parseCommandLine(cmd_line, args);
+
+    int pid = fork();
+    if (pid < 0) {
+        perror("smash error: fork failed");
+    } else if (pid == 0) {
+        execvp(args[0], args);
+        perror("smash error: execvp failed");
+    } else {
+        _pid = pid;
+        if (!bg_cmd) {
+            _smash->_running_cmd = this;
+            if (waitpid(pid, nullptr, WUNTRACED) < 0) {
+                perror("smash error: waitpid failed");
+            }
+            _smash->_running_cmd = nullptr;
+        }
+    }
 }
 
 /* -------------- ChpromptCommand -------------- */
@@ -196,7 +244,7 @@ ShowPidCommand::ShowPidCommand(const char* cmd_line, char* args[], SmallShell *s
 
 void ShowPidCommand::execute() {
     // TODO: consider changing smash to _smash->name();
-    cout << "smash pid is " << getpid() << endl;
+    cout << "smash pid is " << _pid << endl;
 }
 
 /* -------------- GetCurrDirCommand -------------- */
@@ -237,66 +285,20 @@ void ChangeDirCommand::execute() {
     smash_cd_called() = true;
 }
 
-/* -------------- ExternalCommand -------------- */
-
-ExternalCommand::ExternalCommand(const char* cmd_line, SmallShell *smash):
-    Command(cmd_line) {
-    _smash = smash;
-}
-
-void ExternalCommand::execute() {
-    char cmd_line[COMMAND_ARGS_MAX_LENGTH];
-    strcpy(cmd_line, this->cmd_line());
-
-    bool bg_cmd = _isBackgroundComamnd(cmd_line);
-    if (bg_cmd) {
-        _removeBackgroundSign(cmd_line);
-    }
-    char* args[COMMAND_MAX_ARGS + 1];
-    _parseCommandLine(cmd_line, args);
-
-    int pid = fork();
-    if (pid < 0) {
-        perror("smash error: fork failed");
-    } else if (pid == 0) {
-        execvp(args[0], args);
-        perror("smash error: execvp failed");
-    } else {
-        _pid = pid;
-        if (!bg_cmd) {
-            _smash->_running_cmd_pid = pid;
-            _smash->_running_cmd = this;
-            if (waitpid(pid, nullptr, WUNTRACED) < 0) {
-                perror("smash error: fork failed");
-            }
-            _smash->_running_cmd_pid = 0;
-            _smash->_running_cmd = nullptr;
-        }
-    }
-}
-
-int ExternalCommand::pid() {
-    return _pid;
-}
-
-/* -------------- JobsCommand -------------- */
-
-JobsCommand::JobsCommand(const char* cmd_line, SmallShell *smash, JobsList* jobs):
-    BuiltInCommand(cmd_line, smash) {
-    _jobs = jobs;
-}
-
-void JobsCommand::execute() {
-    _jobs->printJobsList();
-}
-
-
-/* -------------- JobEntry -------------- */
+/* -------------- JobsList::JobEntry -------------- */
 
 JobsList::JobEntry::JobEntry(Command *cmd, bool stopped) {
     _start = time(nullptr);
     _cmd = cmd;
     _stopped = stopped;
+}
+
+Command *JobsList::JobEntry::cmd() {
+    return _cmd;
+}
+
+bool &JobsList::JobEntry::stopped() {
+    return _stopped;
 }
 
 /* -------------- JobsList -------------- */
@@ -323,3 +325,114 @@ void JobsList::printJobsList() {
     }
 }
 
+JobsList::JobEntry *JobsList::getJobById(int jid) {
+    FUNC_ENTRY()
+    for (JobEntry *job : _jobs) {
+        if (job->_jid == jid) {
+            FUNC_EXIT()
+            return job;
+        }
+    }
+    throw Command::CommandError("fg: job-id <job-id> does not exist");
+}
+
+JobsList::JobEntry *JobsList::getLastJob(int* lastJobId) {
+    if (_jobs.empty()) {
+        throw Command::CommandError("fg: jobs list is empty");
+    }
+    JobEntry *ret = _jobs.back();
+    _jobs.pop_back();
+    if (lastJobId) {
+        *lastJobId = ret->_jid;
+    }
+    return ret;
+}
+
+JobsList::JobEntry *JobsList::getLastStoppedJob(int* lastJobId) {
+    FUNC_ENTRY()
+    if (_jobs.empty()) {
+        throw Command::CommandError("fg: jobs list is empty");
+    }
+    for (auto it = _jobs.rbegin(); it != _jobs.rend(); ++it) {
+        if ((*it)->_stopped) {
+            JobEntry *ret = *it;
+            if (lastJobId) {
+                *lastJobId = ret->_jid;
+            }
+            FUNC_EXIT()
+            return ret;
+        }
+    }
+    FUNC_EXIT()
+    return nullptr;
+}
+
+void JobsList::removeJobById(int jid) {
+    for (JobEntry *job : _jobs) {
+        if (job->_jid == jid) {
+            _jobs.remove(job);
+            return;
+        }
+    }
+}
+
+/* -------------- JobsCommand -------------- */
+
+JobsCommand::JobsCommand(const char* cmd_line, SmallShell *smash, JobsList* jobs):
+    BuiltInCommand(cmd_line, smash) {
+    _jobs = jobs;
+}
+
+void JobsCommand::execute() {
+    _jobs->printJobsList();
+}
+
+/* -------------- ForegroundCommand -------------- */
+
+ForegroundCommand::ForegroundCommand(const char* cmd_line, char* args[], SmallShell *smash, JobsList* jobs):
+    BuiltInCommand(cmd_line, smash) {
+    JobsList::JobEntry *job;
+    // todo: check cmd_line
+    int jid;
+    if (args[1]) {
+        jid = stoi(args[1]);
+        job = jobs->getJobById(jid);
+    } else {
+        job = jobs->getLastJob(&jid);
+    }
+    jobs->removeJobById(jid);
+    _cmd = job->cmd();
+}
+
+void ForegroundCommand::execute() {
+    cout << _cmd->cmd_line() << " : " << _cmd->pid() << endl;
+    kill(_cmd->pid(), SIGCONT);
+    smash_running_cmd() = _cmd;
+    waitpid(_cmd->pid(), nullptr, WUNTRACED);
+}
+
+/* -------------- BackgroundCommand -------------- */
+
+BackgroundCommand::BackgroundCommand(const char* cmd_line, char* args[], SmallShell *smash, JobsList* jobs):
+    BuiltInCommand(cmd_line, smash) {
+    FUNC_ENTRY()
+
+    JobsList::JobEntry *job;
+    // todo: check cmd_line
+    int jid;
+    if (args[1]) {
+        jid = stoi(args[1]);
+        job = jobs->getJobById(jid);
+    } else {
+        job = jobs->getLastStoppedJob(&jid);
+    }
+    job->stopped() = false;
+    _cmd = job->cmd();
+
+    FUNC_EXIT()
+}
+
+void BackgroundCommand::execute() {
+    cout << _cmd->cmd_line() << " : " << _cmd->pid() << endl;
+    kill(_cmd->pid(), SIGCONT);
+}
