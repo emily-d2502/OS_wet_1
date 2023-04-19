@@ -14,7 +14,7 @@ public:
     virtual void execute() = 0;
     //virtual void prepare();
     //virtual void cleanup();
-    int pid();
+    virtual int pid();
     const char *cmd_line() const;
 
     class CommandError {
@@ -24,8 +24,36 @@ public:
         const std::string& what() const;
     };
 private:
-    const char* _cmd_line;
+    char* _cmd_line;
 };
+
+#define DECLARE_SMALL_SHELL()                       \
+    /* todo: please declare it after JobList */     \
+class SmallShell {                                  \
+private:                                            \
+    SmallShell();                                   \
+    friend class BuiltInCommand;                    \
+    friend class ExternalCommand;                   \
+                                                    \
+    std::string _name;                              \
+    char *_cwd;                                     \
+    bool _cd_called;                                \
+    JobsList _job_list;                             \
+    int _running_cmd_pid;                           \
+    Command* _running_cmd;                          \
+                                                    \
+public:                                             \
+    static SmallShell& getInstance();               \
+    SmallShell(SmallShell const&)      = delete;    \
+    void operator=(SmallShell const&)  = delete;    \
+    ~SmallShell() {}                                \
+                                                    \
+    Command *CreateCommand(const char* cmd_line);   \
+    void executeCommand(const char* cmd_line);      \
+    const std::string& name() const;                \
+    void handle_ctrl_z(int sig_num);                \
+};
+
 
 class SmallShell;
 class BuiltInCommand : public Command {
@@ -71,20 +99,31 @@ public:
     void execute() override;
 };
 
+class ExternalCommand : public Command {
+private:
+    SmallShell *_smash;
+    int _pid;
+public:
+    ExternalCommand(const char* cmd_line, SmallShell *smash);
+    virtual ~ExternalCommand() {}
+    void execute() override;
+    int pid() override;
+};
+
 class JobsList {
 public:
     class JobEntry {
     public:
-        JobEntry(Command *cmd, bool stopped, JobsList* jobs);
+        JobEntry(Command *cmd, bool stopped);
     private:
-        int _job_id;
+        int _jid;
         bool _stopped;
         time_t _start;
         Command *_cmd;
 
         friend JobsList;
     };
-    JobsList() = default;
+    JobsList();
     ~JobsList() {}
     void addJob(Command* cmd, bool stopped = false);
     void printJobsList();
@@ -97,37 +136,18 @@ public:
 //   TODO: Add extra methods or modify exisitng ones as needed
 private:
     std::list<JobEntry *> _jobs;
-    int _last_job_id;
+    int _next_jid;
 };
 
-class SmallShell {
- private:
-    SmallShell();
-    friend class BuiltInCommand;
-    
-    std::string _name;
-    char *_cwd;
-    bool _cd_called;
-    JobsList _job_list;
+DECLARE_SMALL_SHELL()
 
- public:
-    static SmallShell& getInstance();
-    SmallShell(SmallShell const&)      = delete;
-    void operator=(SmallShell const&)  = delete;
-    ~SmallShell() {}
-
-    Command *CreateCommand(const char* cmd_line);
-    void executeCommand(const char* cmd_line);
-    const std::string& name();
-};
-
-class ExternalCommand : public Command {
+class JobsCommand : public BuiltInCommand {
+    JobsList *_jobs;
 public:
-    ExternalCommand(const char* cmd_line);
-    virtual ~ExternalCommand() {}
+    JobsCommand(const char* cmd_line, SmallShell *smash, JobsList* jobs);
+    virtual ~JobsCommand() {}
     void execute() override;
 };
-
 
 
 

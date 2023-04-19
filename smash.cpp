@@ -16,8 +16,6 @@ int main(int argc, char* argv[]) {
     //     perror("smash error: failed to set ctrl-C handler");
     // }
 
-    // char* args[] = {"ls", NULL};
-    // execvp("ls", args);
     SmallShell& smash = SmallShell::getInstance();
     while(true) {
         cout << smash.name();
