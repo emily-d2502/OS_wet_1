@@ -17,3 +17,6 @@ void alarmHandler(int sig_num) {
   // TODO: Add your implementation
 }
 
+void sigchld_handler(int sig_num) {
+    SmallShell::getInstance().handle_sigchld(sig_num);
+}

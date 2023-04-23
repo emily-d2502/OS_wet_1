@@ -12,22 +12,18 @@ int main(int argc, char* argv[]) {
     if (signal(SIGTSTP , ctrlZHandler) == SIG_ERR) {
         perror("smash error: failed to set ctrl-Z handler");
     }
+    if (signal(SIGCHLD , sigchld_handler) == SIG_ERR) {
+        perror("smash error: failed to set ctrl-Z handler");
+    }
     // if(signal(SIGINT , ctrlCHandler)==SIG_ERR) {
     //     perror("smash error: failed to set ctrl-C handler");
     // }
 
     SmallShell& smash = SmallShell::getInstance();
-    while(true) {
+    string cmd_line;
+    do {
         cout << smash.name();
-        string cmd_line;
         getline(std::cin, cmd_line);
-        if (cmd_line.empty()) {
-            continue;
-        }
-        if (cmd_line == "q") {
-            break;
-        }
-        smash.executeCommand(cmd_line.c_str());
-    }
-    return 0;
+    } while (smash.executeCommand(cmd_line.c_str()));
+    return 1;
 }

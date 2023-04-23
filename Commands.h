@@ -1,6 +1,7 @@
 #ifndef SMASH_COMMAND_H_
 #define SMASH_COMMAND_H_
 
+#include <string>
 #include <vector>
 #include <list>
 
@@ -10,7 +11,7 @@
 class SmallShell;
 class Command {
 public:
-    Command(const char* cmd_line, SmallShell *smash);
+    Command(const char* cmd_line);
     virtual ~Command() {}
     virtual void execute() = 0;
     int pid();
@@ -29,7 +30,7 @@ private:
     std::string _message;
 public:
     CommandError(const std::string& message);
-    std::string& what() const;
+    const std::string& what() const;
 };
 
 #define DECLARE_SMALL_SHELL()                       \
@@ -54,9 +55,10 @@ public:                                             \
     ~SmallShell() {}                                \
                                                     \
     Command *CreateCommand(const char* cmd_line);   \
-    void executeCommand(const char* cmd_line);      \
+    bool executeCommand(const char* cmd_line);      \
     const std::string& name() const;                \
     void handle_ctrl_z(int sig_num);                \
+    void handle_sigchld(int sig_num);               \
 };
 
 
@@ -67,13 +69,13 @@ protected:
     bool &smash_cd_called();
     Command* &smash_running_cmd();
 public:
-    BuiltInCommand(const char* cmd_line, SmallShell *smash);
+    BuiltInCommand(const char* cmd_line);
     virtual ~BuiltInCommand() {}
 };
 
 class ExternalCommand : public Command {
 public:
-    ExternalCommand(const char* cmd_line, SmallShell *smash);
+    ExternalCommand(const char* cmd_line);
     virtual ~ExternalCommand() {}
     void execute() override;
 };
@@ -82,21 +84,21 @@ class ChpromptCommand : public BuiltInCommand {
 private:
     std::string _new_name;
 public:
-    ChpromptCommand(const char* cmd_line, char* args[], SmallShell *smash);
+    ChpromptCommand(const char* cmd_line, char* args[]);
     virtual ~ChpromptCommand() {}
     void execute() override;
 };
 
 class ShowPidCommand : public BuiltInCommand {
 public:
-    ShowPidCommand(const char* cmd_line, char* args[], SmallShell *smash);
+    ShowPidCommand(const char* cmd_line, char* args[]);
     virtual ~ShowPidCommand() {}
     void execute() override;
 };
 
 class GetCurrDirCommand : public BuiltInCommand {
 public:
-    GetCurrDirCommand(const char* cmd_line, char* args[], SmallShell *smash);
+    GetCurrDirCommand(const char* cmd_line, char* args[]);
     virtual ~GetCurrDirCommand() {}
     void execute() override;
 };
@@ -105,7 +107,7 @@ class ChangeDirCommand : public BuiltInCommand {
 private:
     char *_new_dir;
 public:
-    ChangeDirCommand(const char* cmd_line, char* args[], SmallShell *smash);
+    ChangeDirCommand(const char* cmd_line, char* args[]);
     virtual ~ChangeDirCommand() {}
     void execute() override;
 };
@@ -152,7 +154,7 @@ DECLARE_SMALL_SHELL()
 class JobsCommand : public BuiltInCommand {
     JobsList *_jobs;
 public:
-    JobsCommand(const char* cmd_line, SmallShell *smash, JobsList* jobs);
+    JobsCommand(const char* cmd_line, JobsList* jobs);
     virtual ~JobsCommand() {}
     void execute() override;
 };
@@ -160,7 +162,7 @@ public:
 class ForegroundCommand : public BuiltInCommand {
     Command *_cmd;
 public:
-    ForegroundCommand(const char* cmd_line, char* args[], SmallShell *smash, JobsList* jobs);
+    ForegroundCommand(const char* cmd_line, char* args[], JobsList* jobs);
     virtual ~ForegroundCommand() {}
     void execute() override;
 };
@@ -168,11 +170,19 @@ public:
 class BackgroundCommand : public BuiltInCommand {
     Command *_cmd;
 public:
-    BackgroundCommand(const char* cmd_line, char* args[], SmallShell *smash, JobsList* jobs);
+    BackgroundCommand(const char* cmd_line, char* args[], JobsList* jobs);
     virtual ~BackgroundCommand() {}
     void execute() override;
 };
 
+class QuitCommand : public BuiltInCommand {
+    bool _kill;
+    JobsList* _jobs;
+public:
+    QuitCommand(const char* cmd_line, char* args[], JobsList* jobs);
+    virtual ~QuitCommand() {}
+    void execute() override;
+};
 
 
 
