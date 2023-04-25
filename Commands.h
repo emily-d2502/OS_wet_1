@@ -184,6 +184,16 @@ public:
     void execute() override;
 };
 
+class KillCommand : public BuiltInCommand {
+public:
+    KillCommand(const char* cmd_line, char* args[], JobsList* jobs);
+    virtual ~KillCommand() {}
+    void execute() override;
+private:
+    int _pid;
+    int _signum;
+};
+
 
 
 

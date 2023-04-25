@@ -146,6 +146,8 @@ Command *SmallShell::CreateCommand(const char* cmd_line) {
         return new BackgroundCommand(cmd_line, args, &_job_list);
     } else if (firstWord.compare("quit") == 0) {
         return new QuitCommand(cmd_line, args, &_job_list);
+    } else if (firstWord.compare("kill") == 0) {
+        return new KillCommand(cmd_line, args, &_job_list);
     }
     return new ExternalCommand(cmd_line);
 }
@@ -353,7 +355,7 @@ JobsList::JobEntry *JobsList::getJobById(int jid) {
             return job;
         }
     }
-    throw Command::CommandError("fg: job-id <job-id> does not exist");
+    throw Command::CommandError("<job-id> does not exist");
 }
 
 JobsList::JobEntry *JobsList::getLastJob(int* lastJobId) {
@@ -491,4 +493,21 @@ void QuitCommand::execute() {
     if (_kill) {
         _jobs->killAllJobs();
     }
+}
+
+/* -------------- KillCommand -------------- */
+
+KillCommand::KillCommand(const char* cmd_line, char* args[], JobsList* jobs):
+    BuiltInCommand(cmd_line) {
+    // todo: check input
+    try {
+        _pid = jobs->getJobById(stoi(args[2]))->cmd()->pid();
+    } catch (const CommandError& e) {
+        throw CommandError("kill: job-id " + e.what());
+    }
+    _signum = stoi(args[1] + 1);
+}
+
+void KillCommand::execute() {
+    kill(_pid, _signum);
 }
