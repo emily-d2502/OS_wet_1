@@ -10,13 +10,9 @@ void ctrlZHandler(int sig_num) {
 }
 
 void ctrlCHandler(int sig_num) {
-  // TODO: Add your implementation
+    SmallShell::getInstance().handle_ctrl_c(sig_num);
 }
 
 void alarmHandler(int sig_num) {
-  // TODO: Add your implementation
-}
 
-void sigchld_handler(int sig_num) {
-    SmallShell::getInstance().handle_sigchld(sig_num);
 }

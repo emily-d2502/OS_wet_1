@@ -14,7 +14,7 @@ public:
     Command(const char* cmd_line);
     virtual ~Command() {}
     virtual void execute() = 0;
-    int pid();
+    pid_t pid();
     const char *cmd_line();
 
     class CommandError;
@@ -22,7 +22,7 @@ private:
     char* _cmd_line;
 protected:
     SmallShell *_smash;
-    int _pid;
+    pid_t _pid;
 };
 
 class Command::CommandError {
@@ -45,7 +45,6 @@ private:                                            \
     char *_cwd;                                     \
     bool _cd_called;                                \
     JobsList _job_list;                             \
-                                                    \
     Command* _running_cmd;                          \
                                                     \
 public:                                             \
@@ -58,7 +57,7 @@ public:                                             \
     bool executeCommand(const char* cmd_line);      \
     const std::string& name() const;                \
     void handle_ctrl_z(int sig_num);                \
-    void handle_sigchld(int sig_num);               \
+    void handle_ctrl_c(int sig_num);                \
 };
 
 
@@ -76,8 +75,15 @@ public:
 class ExternalCommand : public Command {
 public:
     ExternalCommand(const char* cmd_line);
-    virtual ~ExternalCommand() {}
+    virtual ~ExternalCommand() {
+        delete[] _args;
+        delete _command;
+    }
     void execute() override;
+private:
+    bool _background_cmd;
+    char** _args;
+    char* _command;
 };
 
 class ChpromptCommand : public BuiltInCommand {
@@ -114,18 +120,22 @@ public:
 
 class JobsList {
 public:
-    class JobEntry;
     JobsList();
-    ~JobsList() {}
+    JobsList(const JobsList& jl)            = delete;
+    JobsList& operator=(const JobsList& jl) = delete;
+    ~JobsList()                             = default;
+
     void addJob(Command* cmd, bool stopped = false);
+    void removeJobById(int jobId);
+    void removeFinishedJobs();
     void printJobsList();
     void killAllJobs();
-    void removeFinishedJobs();
-    JobEntry * getJobById(int jobId);
-    void removeJobById(int jobId);
-    JobEntry * getLastJob(int* lastJobId); // add support when it's nullptr
+
+    class JobEntry;
+    JobEntry *getJobById(int jobId);
+    JobEntry *getLastJob(int* lastJobId);
     JobEntry *getLastStoppedJob(int *jobId);
-//   TODO: Add extra methods or modify exisitng ones as needed
+
 private:
     std::list<JobEntry *> _jobs;
     int _next_jid;
@@ -134,14 +144,17 @@ private:
 class JobsList::JobEntry {
 public:
     JobEntry(Command *cmd, bool stopped);
-    JobEntry(const JobEntry&) = delete;
+    JobEntry(const JobEntry&)       = delete;
     void operator=(const JobEntry&) = delete;
-    ~JobEntry() {}
+    ~JobEntry()                     = default;
+
     Command *cmd();
     bool &stopped();
+    pid_t pid() const;
 
 private:
     int _jid;
+    pid_t _pid;
     bool _stopped;
     time_t _start;
     Command *_cmd;
@@ -160,19 +173,21 @@ public:
 };
 
 class ForegroundCommand : public BuiltInCommand {
-    Command *_cmd;
 public:
     ForegroundCommand(const char* cmd_line, char* args[], JobsList* jobs);
     virtual ~ForegroundCommand() {}
     void execute() override;
+private:
+    Command *_cmd;
 };
 
 class BackgroundCommand : public BuiltInCommand {
-    Command *_cmd;
 public:
     BackgroundCommand(const char* cmd_line, char* args[], JobsList* jobs);
     virtual ~BackgroundCommand() {}
     void execute() override;
+private:
+    Command *_cmd;
 };
 
 class QuitCommand : public BuiltInCommand {
@@ -193,6 +208,7 @@ private:
     int _pid;
     int _signum;
 };
+
 
 
 
