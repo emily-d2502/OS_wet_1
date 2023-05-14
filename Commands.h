@@ -205,12 +205,55 @@ public:
     virtual ~KillCommand() {}
     void execute() override;
 private:
-    int _pid;
+    pid_t _pid;
     int _signum;
 };
 
+class RedirectionCommand : public Command {
+public:
+    RedirectionCommand(const char* cmd_line);
+    virtual ~RedirectionCommand() {}
+    void execute() override;
+private:
+    std::string _filename;
+    Command *_cmd;
+    bool _append;
+};
 
+class PipeCommand : public Command {
+public:
+    PipeCommand(const char* cmd_line);
+    virtual ~PipeCommand() {}
+    void execute() override;
+private:
+    Command* _cmds[2];
+};
 
+class GetFileTypeCommand : public BuiltInCommand {
+public:
+    GetFileTypeCommand(const char* cmd_line, char* args[]);
+    virtual ~GetFileTypeCommand() {}
+    void execute() override;
+private:
+    char* _path;
+};
 
+class ChmodCommand : public BuiltInCommand {
+public:
+    ChmodCommand(const char* cmd_line, char* args[]);
+    virtual ~ChmodCommand() {}
+    void execute() override;
+private:
+    mode_t _new_mode;
+    char* _path;
+};
+
+class SetcoreCommand : public Command {
+public:
+    SetcoreCommand(const char* cmd_line, JobsList* jobs);
+    virtual ~SetcoreCommand() {}
+    void execute() override;
+private:
+};
 
 #endif //SMASH_COMMAND_H_

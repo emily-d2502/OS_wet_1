@@ -4,8 +4,11 @@
 #include <vector>
 #include <sstream>
 #include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <signal.h>
 #include <iomanip>
+#include <fcntl.h>
 #include "Commands.h"
 
 using namespace std;
@@ -107,18 +110,49 @@ bool _isComplex(const std::string& s) {
     char ch2 = '?';
     size_t pos1 = s.find(ch1);
     size_t pos2 = s.find(ch2);
-    if (pos1 != std::string::npos || pos2 != std::string::npos){
-        return true;
-    }
-    return false;
+    return pos1 != std::string::npos || pos2 != std::string::npos;
 }
 
-bool _isNumber(const std::string& s)
-{
+bool _isNumber(const std::string& s) {
     return !s.empty() && 
     std::find_if(s.begin(), s.end(), 
     [](unsigned char c) { return !std::isdigit(c); }) == s.end();
 }
+
+bool _isRegularRedirection(const std::string& s) {
+    char ch = '>';
+    size_t pos = s.find(ch);
+    return pos != std::string::npos;
+}
+
+bool _isAppendRedirection(const std::string& s) {
+    std::string ch = ">>";
+    size_t pos = s.find(ch);
+    return pos != std::string::npos;
+}
+
+bool _isRedirectionCommand(const char* cmd_line) {
+    string s(cmd_line);
+    return _isRegularRedirection(s) || _isAppendRedirection(s);
+}
+
+bool _isRegularPipe(const std::string& s) {
+    char ch = '|';
+    size_t pos = s.find(ch);
+    return pos != std::string::npos;
+}
+
+bool _isStderrPipe(const std::string& s) {
+    std::string ch = "|&";
+    size_t pos = s.find(ch);
+    return pos != std::string::npos;
+}
+
+bool _isPipeCommand(const char* cmd_line) {
+    string s(cmd_line);
+    return _isRegularPipe(s) || _isStderrPipe(s);
+}
+
 /* -------------- Command -------------- */
 
 Command::Command(const char* cmd_line) {
@@ -160,6 +194,12 @@ SmallShell &SmallShell::getInstance() {
 
 Command *SmallShell::CreateCommand(const char* cmd_line) {
 
+    if (_isPipeCommand(cmd_line)) {
+        return new PipeCommand(cmd_line);
+    } else if (_isRedirectionCommand(cmd_line)) {
+        return new RedirectionCommand(cmd_line);
+    }
+
     char* args[COMMAND_MAX_ARGS];
     _parseCommandLine(cmd_line, args);
     string firstWord(args[0]);
@@ -185,6 +225,10 @@ Command *SmallShell::CreateCommand(const char* cmd_line) {
         return new QuitCommand(cmd_line, args, &_job_list);
     } else if (firstWord.compare("kill") == 0) {
         return new KillCommand(cmd_line, args, &_job_list);
+    } else if (firstWord.compare("getfileinfo") == 0) {
+        return new GetFileTypeCommand(cmd_line, args);
+    } else if (firstWord.compare("chmod") == 0) {
+        return new ChmodCommand(cmd_line, args);
     }
     return new ExternalCommand(cmd_line);
 }
@@ -616,3 +660,164 @@ void KillCommand::execute() {
     cout << "signal number " << _signum << " was sent to pid " << _pid << endl;
     kill(_pid, _signum);
 }
+
+/* -------------- RedirectionCommand -------------- */
+
+RedirectionCommand::RedirectionCommand(const char* cmd_line):
+    Command(cmd_line) {
+    FUNC_ENTRY()
+    size_t pos;
+    string _cmd_line(cmd_line);
+    _removeBackgroundSign(_cmd_line);
+    _append = _isAppendRedirection(_cmd_line);
+    if (!_append) {
+        pos = _cmd_line.find('>');
+        _filename = _cmd_line.substr(pos + 1, _cmd_line.length());
+    } else {
+        pos = _cmd_line.find(">>");
+        _filename = _cmd_line.substr(pos + 2, _cmd_line.length());
+    }
+    _cmd = _smash->CreateCommand(_trim(_cmd_line.substr(0, pos)).c_str());
+    _filename = _trim(_filename);
+}
+
+void RedirectionCommand::execute() {
+    FUNC_ENTRY()
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("smash error: fork failed");
+    } else if (pid == 0) {
+        close(1);
+        if (_append) {
+            open(_filename.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0666);
+        } else {
+            open(_filename.c_str(), O_WRONLY | O_CREAT, 0666);
+        }
+        _cmd->execute();
+        exit(0);
+    } else {
+        if (waitpid(pid, nullptr, WUNTRACED) < 0) {
+            perror("smash error: waitpid failed");
+        }
+    }
+}
+
+/* -------------- PipeCommand -------------- */
+
+PipeCommand::PipeCommand(const char* cmd_line):
+    Command(cmd_line) {
+    FUNC_ENTRY()
+
+    size_t pos;
+    string _cmd_line_2;
+    string _cmd_line(cmd_line);
+    _removeBackgroundSign(_cmd_line);
+    if (_isRegularPipe(_cmd_line)) {
+        pos = _cmd_line.find('|');
+        _cmd_line_2 = _cmd_line.substr(pos + 1, _cmd_line.length());
+    } else {
+        pos = _cmd_line.find("|&");
+        _cmd_line_2 = _cmd_line.substr(pos + 2, _cmd_line.length());
+    }
+    _cmds[0] = _smash->CreateCommand(_trim(_cmd_line.substr(0, pos)).c_str());
+    _cmds[1] = _smash->CreateCommand(_trim(_cmd_line_2).c_str());
+}
+
+void PipeCommand::execute() {
+    FUNC_ENTRY()
+    
+    int _pipe[2];
+    pipe(_pipe);
+    int _out = _isRegularPipe(cmd_line()) ? 1 : 2;
+    pid_t pid_1 = fork();
+    if (pid_1 < 0) {
+        perror("smash error: fork failed");
+    } else if (pid_1 == 0) {
+        dup2(_pipe[1], _out);
+        close(_pipe[0]);
+        close(_pipe[1]);
+        _cmds[0]->execute();
+        exit(0);
+    }
+    pid_t pid_2 = fork();
+    if (pid_2 < 0) {
+        perror("smash error: fork failed");
+    } else if (pid_2 == 0) {
+        dup2(_pipe[0], 0);
+        close(_pipe[0]);
+        close(_pipe[1]);
+        _cmds[1]->execute();
+        exit(0);
+    }
+    close(_pipe[0]);
+    close(_pipe[1]);
+    if (waitpid(pid_1, nullptr, WUNTRACED) < 0) {
+        perror("smash error: waitpid failed");
+    }
+    if (waitpid(pid_2, nullptr, WUNTRACED) < 0) {
+        perror("smash error: waitpid failed");
+    }
+}
+
+/* -------------- GetFileTypeCommand -------------- */
+
+GetFileTypeCommand::GetFileTypeCommand(const char* cmd_line, char* args[]):
+    BuiltInCommand(cmd_line) {
+    FUNC_ENTRY()
+    if (args[2]) {
+        throw Command::CommandError("gettype: invalid arguments");
+    }
+    _path = args[1];
+}
+
+void GetFileTypeCommand::execute() {
+    FUNC_ENTRY()
+    struct stat stats;
+    stat(_path, &stats);
+    std::string type;
+    
+    if (S_ISREG(stats.st_mode)) {
+        type = "\"regular file\"";
+    } else if (S_ISDIR(stats.st_mode)) {
+        type = "\"directory\"";
+    } else if (S_ISCHR(stats.st_mode)) {
+        type = "\"character device\"";
+    } else if (S_ISBLK(stats.st_mode)) {
+        type = "\"block device\"";
+    } else if (S_ISFIFO(stats.st_mode)) {
+        type = "\"FIFO\"";
+    } else if (S_ISLNK(stats.st_mode)) {
+        type = "\"symbolic link\"";
+    } else if (S_ISSOCK(stats.st_mode)) {
+        type = "\"socket\"";
+    } else {
+        throw Command::CommandError("gettype: invalid arguments");
+    }
+    cout << _path << "'s type is " << type;
+    cout << " and takes up " << stats.st_size << " bytes" << endl;
+}
+
+/* -------------- ChmodCommand -------------- */
+
+ChmodCommand::ChmodCommand(const char *cmd_line, char* args[]): 
+    BuiltInCommand(cmd_line) {
+    FUNC_ENTRY()
+    if (args[3] || !_isNumber(string(args[1]))) {
+        throw Command::CommandError("chmod: invalid arguments");
+    }
+    try {
+        _new_mode = stoi(args[1], 0 , 8);
+    } catch (...) {
+        throw Command::CommandError("chmod: invalid arguments");
+    }
+    _path = args[2];
+}
+
+void ChmodCommand::execute() {
+    if (chmod(_path, _new_mode) < 0) {
+        perror("smash error: chmod failed");
+    }
+}
+
+/* -------------- SetcoreCommand -------------- */
+
