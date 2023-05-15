@@ -248,12 +248,14 @@ private:
     char* _path;
 };
 
-class SetcoreCommand : public Command {
+class SetcoreCommand : public BuiltInCommand {
 public:
-    SetcoreCommand(const char* cmd_line, JobsList* jobs);
+    SetcoreCommand(const char* cmd_line, char* args[], JobsList* jobs);
     virtual ~SetcoreCommand() {}
     void execute() override;
 private:
+    int _core;
+    pid_t _pid;
 };
 
 #endif //SMASH_COMMAND_H_

@@ -119,6 +119,10 @@ bool _isNumber(const std::string& s) {
     [](unsigned char c) { return !std::isdigit(c); }) == s.end();
 }
 
+bool _isNumber(const char* s) {
+    return _isNumber(string(s));
+}
+
 bool _isRegularRedirection(const std::string& s) {
     char ch = '>';
     size_t pos = s.find(ch);
@@ -229,6 +233,8 @@ Command *SmallShell::CreateCommand(const char* cmd_line) {
         return new GetFileTypeCommand(cmd_line, args);
     } else if (firstWord.compare("chmod") == 0) {
         return new ChmodCommand(cmd_line, args);
+    } else if (firstWord.compare("setcore") == 0) {
+        return new SetcoreCommand(cmd_line, args, &_job_list);
     }
     return new ExternalCommand(cmd_line);
 }
@@ -814,6 +820,7 @@ ChmodCommand::ChmodCommand(const char *cmd_line, char* args[]):
 }
 
 void ChmodCommand::execute() {
+    FUNC_ENTRY()
     if (chmod(_path, _new_mode) < 0) {
         perror("smash error: chmod failed");
     }
@@ -821,3 +828,26 @@ void ChmodCommand::execute() {
 
 /* -------------- SetcoreCommand -------------- */
 
+SetcoreCommand::SetcoreCommand(const char *cmd_line, char* args[], JobsList* jobs):
+    BuiltInCommand(cmd_line) {
+    FUNC_ENTRY()
+    if (args[3] || !_isNumber(args[1]) || !_isNumber(args[2])) {
+        throw Command::CommandError("setcore: invalid arguments");
+    }
+    _core = stoi(args[2]);
+    try {
+        _pid = jobs->getJobById(stoi(args[1]))->pid();
+
+    } catch (const CommandError& e) {
+        throw CommandError("setcore: " + e.what());
+    }
+}
+
+void SetcoreCommand::execute(){
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(_core, &cpuset);
+    if (sched_setaffinity(_pid, sizeof(cpuset), &cpuset) == -1){
+        throw Command::CommandError("setcore: invalid core number");
+    }
+}
