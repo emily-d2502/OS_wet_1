@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <fcntl.h>
 #include "Commands.h"
+#include <algorithm>
 
 using namespace std;
 const std::string WHITESPACE = " \n\r\t\f\v";
@@ -114,8 +115,8 @@ bool _isComplex(const std::string& s) {
 }
 
 bool _isNumber(const std::string& s) {
-    return !s.empty() && 
-    std::find_if(s.begin(), s.end(), 
+    return !s.empty() &&
+    std::find_if(s.begin(), s.end(),
     [](unsigned char c) { return !std::isdigit(c); }) == s.end();
 }
 
@@ -259,17 +260,23 @@ const std::string& SmallShell::name() const {
 }
 
 void SmallShell::handle_ctrl_z(int sig_num) {
+	cout << "smash: got ctrl-Z" << endl;
     if (_running_cmd) {
-        kill(_running_cmd->pid(), sig_num);
+		pid_t pid = _running_cmd->pid();
+        kill(pid, sig_num);
         _job_list.addJob(_running_cmd, true);
         _running_cmd = nullptr;
+        cout << "smash: process " << pid << " was stopped" << endl;
     }
 }
 
 void SmallShell::handle_ctrl_c(int sig_num) {
+	cout << "smash: got ctrl-C" << endl;
     if (_running_cmd) {
+	    int pid = _running_cmd->pid();
         kill(_running_cmd->pid(), sig_num);
         _running_cmd = nullptr;
+        cout << "smash: process " << pid << " was killed" << endl;
     }
 }
 
@@ -526,7 +533,7 @@ JobsList::JobEntry *JobsList::getLastJob(int* lastJobId) {
 JobsList::JobEntry *JobsList::getLastStoppedJob(int* lastJobId) {
     FUNC_ENTRY()
     if (_jobs.empty()) {
-        throw Command::CommandError("jobs list is empty");
+        throw Command::CommandError("there is no stopped jobs to resume");
     }
     for (auto it = _jobs.rbegin(); it != _jobs.rend(); ++it) {
         if ((*it)->_stopped) {
@@ -614,7 +621,7 @@ BackgroundCommand::BackgroundCommand(const char* cmd_line, char* args[], JobsLis
             throw Command::CommandError("bg: " + e.what());
         }
         if (!job->stopped()) {
-            throw Command::CommandError("bg: job-id " + to_string(jid) 
+            throw Command::CommandError("bg: job-id " + to_string(jid)
             + " is already running in the background");
         }
     }
@@ -731,7 +738,7 @@ PipeCommand::PipeCommand(const char* cmd_line):
 
 void PipeCommand::execute() {
     FUNC_ENTRY()
-    
+
     int _pipe[2];
     pipe(_pipe);
     int _out = _isRegularPipe(cmd_line()) ? 1 : 2;
@@ -781,7 +788,7 @@ void GetFileTypeCommand::execute() {
     struct stat stats;
     stat(_path, &stats);
     std::string type;
-    
+
     if (S_ISREG(stats.st_mode)) {
         type = "\"regular file\"";
     } else if (S_ISDIR(stats.st_mode)) {
@@ -805,7 +812,7 @@ void GetFileTypeCommand::execute() {
 
 /* -------------- ChmodCommand -------------- */
 
-ChmodCommand::ChmodCommand(const char *cmd_line, char* args[]): 
+ChmodCommand::ChmodCommand(const char *cmd_line, char* args[]):
     BuiltInCommand(cmd_line) {
     FUNC_ENTRY()
     if (args[3] || !_isNumber(string(args[1]))) {
