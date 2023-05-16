@@ -115,9 +115,23 @@ bool _isComplex(const std::string& s) {
 }
 
 bool _isNumber(const std::string& s) {
-    return !s.empty() &&
-    std::find_if(s.begin(), s.end(),
-    [](unsigned char c) { return !std::isdigit(c); }) == s.end();
+    if (s.empty()) {
+        return false;
+    }
+
+    // Check for a leading '-' character if present
+    size_t start = 0;
+    if (s[0] == '-') {
+        if (s.length() == 1) {
+            // The string contains only a '-' character
+            return false;
+        }
+        start = 1;
+    }
+
+    // Check if all remaining characters are digits
+    return std::all_of(s.begin() + start, s.end(),
+                       [](unsigned char c) { return std::isdigit(c); });
 }
 
 bool _isNumber(const char* s) {
@@ -164,6 +178,7 @@ Command::Command(const char* cmd_line) {
     _smash = &SmallShell::getInstance();
     _cmd_line = new char[COMMAND_ARGS_MAX_LENGTH];
     strcpy(_cmd_line, cmd_line);
+    _jid = -1;
 }
 
 const char *Command::cmd_line() {
@@ -441,8 +456,30 @@ void JobsList::addJob(Command* cmd, bool stopped) {
     FUNC_ENTRY()
     removeFinishedJobs();
     JobEntry *job = new JobEntry(cmd, stopped);
-    job->_jid = _next_jid++;
-    _jobs.push_back(job);
+
+    if (cmd->_jid == -1){
+        //JobEntry *job = new JobEntry(cmd, stopped);
+        job->_jid = _next_jid++;
+        cmd->_jid = job->_jid;
+        _jobs.push_back(job);
+    }
+
+    else{
+        //JobEntry *job = new JobEntry(cmd, stopped);
+        job->_jid = cmd->_jid;
+
+        auto it = _jobs.begin();
+        for (; it != _jobs.end(); ++it){
+            auto job2 = *it;
+            if (job2->_jid > job->_jid){
+                break;
+            }
+        }
+        _jobs.insert(it, job);
+
+        //  _jobs.push_back(job);
+    }
+
 }
 
 void JobsList::removeJobById(int jid) {
@@ -655,6 +692,7 @@ void QuitCommand::execute() {
 
 KillCommand::KillCommand(const char* cmd_line, char* args[], JobsList* jobs):
     BuiltInCommand(cmd_line) {
+    FUNC_ENTRY()
 
     if (!args[1] || !args[2] || args[1][0] != '-' || !_isNumber(string(args[1] + 1))
     || !_isNumber(string(args[2])) || args[3]) {
@@ -667,9 +705,13 @@ KillCommand::KillCommand(const char* cmd_line, char* args[], JobsList* jobs):
         throw CommandError("kill: " + e.what());
     }
     _signum = stoi(args[1] + 1);
+    if (_signum > 31 || _signum < 1){
+        throw Command::CommandError("kill: invalid arguments");
+    }
 }
 
 void KillCommand::execute() {
+    FUNC_ENTRY()
     cout << "signal number " << _signum << " was sent to pid " << _pid << endl;
     kill(_pid, _signum);
 }

@@ -15,6 +15,7 @@ public:
     virtual ~Command() {}
     virtual void execute() = 0;
     pid_t pid();
+    int _jid;
     const char *cmd_line();
 
     class CommandError;
