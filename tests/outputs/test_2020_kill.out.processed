@@ -1,6 +1,5 @@
 smash> smash> smash> smash> smash> smash> smash> smash> smash> smash> smash> smash> smash> smash> signal number 9 was sent to pid 2
-smash> smash> smash> smash> signal number 90 was sent to pid 3
-smash> [1] sleep 7& : 3 X secs
+smash> smash> smash> smash> smash> [1] sleep 7& : 3 X secs
 smash> smash> [1] sleep 7& : 3 X secs
 [2] sleep 5& : 4 X secs
 smash> smash> [1] sleep 7& : 3 X secs

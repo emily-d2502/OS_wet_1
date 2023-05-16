@@ -73,7 +73,7 @@ bool _isBackgroundComamnd(const char* cmd_line) {
 void _removeBackgroundSign(char* cmd_line) {
   const string str(cmd_line);
   // find last character other than spaces
-  int idx = str.find_last_not_of(WHITESPACE);
+  unsigned int idx = str.find_last_not_of(WHITESPACE);
   // if all characters are spaces then return
   if (idx == string::npos) {
     return;
@@ -90,7 +90,7 @@ void _removeBackgroundSign(char* cmd_line) {
 
 void _removeBackgroundSign(string& cmd_line) {
     // find last character other than spaces
-    int idx = cmd_line.find_last_not_of(WHITESPACE);
+    unsigned int idx = cmd_line.find_last_not_of(WHITESPACE);
     // if all characters are spaces then return
     if (idx == string::npos) {
         return;
